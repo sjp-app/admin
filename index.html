@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Product Manager</title>
+
+<style>
+*{ box-sizing:border-box; }
+
+body { 
+  font-family: "Segoe UI", sans-serif; 
+  background: #eef2f7; 
+  padding: 20px; 
+  margin:0;
+}
+
+.container { 
+  max-width: 1100px; 
+  margin: auto; 
+  background: white; 
+  padding: 20px; 
+  border-radius: 14px;
+  box-shadow: 0 5px 20px rgba(0,0,0,0.05); 
+}
+
+h2 {
+  margin-bottom: 15px;
+  font-weight: 600;
+}
+
+button { 
+  padding: 10px 15px; 
+  border: none; 
+  background: #0b69ff; 
+  color: white; 
+  border-radius: 8px; 
+  cursor: pointer;
+  font-size:14px; 
+  transition:0.25s; 
+}
+
+button:hover { filter: brightness(0.85); }
+
+button.edit { background: #22c55e; }
+button.delete { background: #ef4444; }
+button.cancel { background: #6b7280; }
+
+select, input, textarea {
+  width: 100%; 
+  padding: 12px; 
+  margin: 8px 0; 
+  border-radius: 8px; 
+  border: 1px solid #ccc;
+  font-size:15px;
+}
+
+.table { 
+  width: 100%; 
+  border-collapse: collapse; 
+  margin-top: 20px;
+}
+
+.table th {
+  background: #f1f5f9;
+  font-weight:600;
+}
+
+.table td, .table th { 
+  border-bottom: 1px solid #ddd; 
+  padding: 10px; 
+  text-align:center;
+}
+
+.table tr:hover { 
+  background: #f9fafb;
+}
+
+img { 
+  width: 70px; 
+  height: 70px; 
+  border-radius: 8px; 
+  object-fit: cover; 
+}
+
+/* ---------- Modal ---------- */
+
+.modal {
+  position: fixed; 
+  top: 0; left: 0; 
+  width: 100%; height: 100%;
+  background: rgba(0,0,0,0.6); 
+  display: none; 
+  justify-content: center; 
+  align-items: center;
+  padding:20px;
+  overflow-y:auto;
+}
+
+.modal-content { 
+  background: white; 
+  padding: 25px; 
+  width: 100%; 
+  max-width: 450px; 
+  border-radius: 14px; 
+  animation: fadeIn 0.3s ease;
+  box-shadow:0 10px 25px rgba(0,0,0,0.15);
+}
+
+.modal-content h3 {
+  margin-top:0; 
+  font-size:20px; 
+  font-weight:600;
+  margin-bottom:10px;
+}
+
+@keyframes fadeIn {
+  from { opacity:0; transform:scale(0.9); }
+  to { opacity:1; transform:scale(1); }
+}
+
+.preview-container img{
+  width:100%;
+  border-radius:10px;
+  margin-top:10px;
+}
+
+.action-buttons{
+  margin-top:15px;
+  display:flex;
+  gap:10px;
+  justify-content:flex-end;
+}
+
+@media(max-width:600px){
+  button{
+    width:100%;
+  }
+  .action-buttons{
+    flex-direction:column;
+  }
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+<h2>Product Management</h2>
+
+<select id="filterCategory">
+<option value="all">All Categories</option>
+</select>
+
+<button onclick="openModal()">➕ Add Product</button>
+
+<table class="table" id="productTable">
+<thead>
+<tr>
+<th>Image</th><th>Title</th><th>Weight</th><th>Karat</th><th>Stock</th><th>Actions</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+</div>
+
+
+<!-- Modal -->
+<div class="modal" id="productModal">
+<div class="modal-content">
+<h3 id="modalTitle">Add Product</h3>
+
+<input id="title" placeholder="Product Title" />
+<input id="weight" placeholder="Weight (grams)" type="number" />
+<input id="making" placeholder="Making Charge" type="number" />
+<textarea id="description" placeholder="Product Description"></textarea>
+<input id="karat" placeholder="Karat" type="number" />
+
+<label>Category:</label>
+<select id="categorySelect"></select>
+
+<label><input type="checkbox" id="showToggle" checked /> Show Product</label>
+<label><input type="checkbox" id="stockToggle" checked /> Stock Available</label>
+
+<label>Upload Image:</label>
+<input type="file" id="imageUpload" accept="image/*" />
+
+<div class="preview-container">
+<img id="preview" style="display:none;" />
+</div>
+
+<div class="action-buttons">
+<button id="saveBtn" onclick="saveProduct()">💾 Save</button>
+<button class="cancel" onclick="closeModal()">✖ Cancel</button>
+</div>
+</div>
+</div>
+
+
+<script type="module">
+/*** Firebase Setup ***/
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, updateDoc, onSnapshot } 
+from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyD5lAZFxBHpYholu5eXtf1Iq1fmRW8pfDg",
+  authDomain: "sjp-backend.firebaseapp.com",
+  projectId: "sjp-backend",
+  storageBucket: "sjp-backend.firebasestorage.app",
+  messagingSenderId: "257623078601",
+  appId: "1:257623078601:web:d99fa246d67243507a3f18",
+  measurementId: "G-3W4R7E530P"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+let editingId = null;
+let base64Image = null;
+
+/*** UI Elements ***/
+const modal = document.getElementById("productModal");
+const tableBody = document.querySelector("#productTable tbody");
+const filterSelect = document.getElementById("filterCategory");
+const categorySelect = document.getElementById("categorySelect");
+const preview = document.getElementById("preview");
+
+/*** Fetch and Load Categories ***/
+async function loadCategories() {
+  const snapshot = await getDocs(collection(db,"firestoreCategories"));
+  snapshot.forEach(doc => {
+    const data = doc.data();
+    categorySelect.innerHTML += `<option value="${doc.id}">${data.title}</option>`;
+    filterSelect.innerHTML += `<option value="${doc.id}">${data.title}</option>`;
+  });
+}
+loadCategories();
+
+/*** Load Products Live ***/
+onSnapshot(collection(db, "products"), snapshot => {
+  tableBody.innerHTML = "";
+  let products = [];
+  
+  snapshot.forEach(doc => products.push({ id: doc.id, ...doc.data() }));
+  
+  if (filterSelect.value !== "all") {
+    products = products.filter(p => p.categoryId === filterSelect.value);
+  }
+
+  products.forEach(p => {
+    tableBody.innerHTML += `
+      <tr>
+        <td><img src="data:image/jpeg;base64,${p.image}" /></td>
+        <td>${p.title}</td>
+        <td>${p.weight}</td>
+        <td>${p.karat}</td>
+        <td>${p.stock ? "✔" : "❌"}</td>
+        <td>
+          <button class="edit" onclick='editProduct(${JSON.stringify(p)})'>Edit</button>
+          <button class="delete" onclick='deleteProduct("${p.id}")'>Delete</button>
+        </td>
+      </tr>`;
+  });
+});
+
+/*** Image Convert to Base64 ***/
+document.getElementById("imageUpload").addEventListener("change", function(event){
+  const reader = new FileReader();
+  reader.onload = () => {
+    base64Image = reader.result.split(",")[1];
+    preview.src = reader.result;
+    preview.style.display = "block";
+  };
+  reader.readAsDataURL(event.target.files[0]);
+});
+
+/*** Modal Controls ***/
+function openModal(){ modal.style.display = "flex"; }
+function closeModal(){ modal.style.display = "none"; editingId = null; base64Image=null; }
+
+window.openModal = openModal;
+window.closeModal = closeModal;
+
+/*** Save Product ***/
+async function saveProduct(){
+  const data = {
+    title: title.value,
+    weight: Number(weight.value),
+    making: Number(making.value),
+    description: description.value,
+    karat: Number(karat.value),
+    categoryId: categorySelect.value,
+    stock: stockToggle.checked,
+    show: showToggle.checked,
+    image: base64Image
+  };
+
+  if(editingId){
+    await updateDoc(doc(db,"products",editingId), data);
+  } else{
+    await addDoc(collection(db,"products"), data);
+  }
+
+  closeModal();
+}
+window.saveProduct = saveProduct;
+
+/*** Edit Product ***/
+window.editProduct = (item) => {
+  editingId = item.id;
+  title.value = item.title;
+  weight.value = item.weight;
+  making.value = item.making;
+  description.value = item.description;
+  karat.value = item.karat;
+  categorySelect.value = item.categoryId;
+  showToggle.checked = item.show;
+  stockToggle.checked = item.stock;
+  base64Image = item.image;
+  preview.src = `data:image/jpeg;base64,${item.image}`;
+  preview.style.display = "block";
+  openModal();
+};
+
+/*** Delete Product ***/
+window.deleteProduct = async (id)=> {
+  if(confirm("Delete Product?")){
+    await deleteDoc(doc(db,"products",id));
+  }
+};
+</script>
+
+</body>
+</html>
