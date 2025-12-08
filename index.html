@@ -9,7 +9,7 @@
 
 body { 
   font-family: "Segoe UI", sans-serif; 
-  background: #eef2f7; 
+  background: #f4f7fb; 
   padding: 20px; 
   margin:0;
 }
@@ -18,13 +18,13 @@ body {
   max-width: 1100px; 
   margin: auto; 
   background: white; 
-  padding: 20px; 
-  border-radius: 14px;
-  box-shadow: 0 5px 20px rgba(0,0,0,0.05); 
+  padding: 25px; 
+  border-radius: 16px;
+  box-shadow: 0 5px 30px rgba(0,0,0,0.05); 
 }
 
 h2 {
-  margin-bottom: 15px;
+  margin-bottom: 20px;
   font-weight: 600;
 }
 
@@ -39,29 +39,37 @@ button {
   transition:0.25s; 
 }
 
-button:hover { filter: brightness(0.85); }
+button:hover { filter: brightness(0.9); }
 
-button.edit { background: #22c55e; }
-button.delete { background: #ef4444; }
-button.cancel { background: #6b7280; }
+button.edit { background: #16a34a; }
+button.delete { background: #dc2626; }
+button.cancel { background: #4b5563; }
 
 select, input, textarea {
   width: 100%; 
   padding: 12px; 
   margin: 8px 0; 
-  border-radius: 8px; 
-  border: 1px solid #ccc;
+  border-radius: 10px; 
+  border: 1px solid #d1d5db;
   font-size:15px;
+  background: #f9fafb;
+  transition: .3s;
+}
+
+select:focus, input:focus, textarea:focus {
+  border-color: #0b69ff;
+  outline: none;
+  background: white;
 }
 
 .table { 
   width: 100%; 
   border-collapse: collapse; 
-  margin-top: 20px;
+  margin-top: 25px;
 }
 
 .table th {
-  background: #f1f5f9;
+  background: #eef2ff;
   font-weight:600;
 }
 
@@ -71,14 +79,12 @@ select, input, textarea {
   text-align:center;
 }
 
-.table tr:hover { 
-  background: #f9fafb;
-}
+.table tr:hover { background: #f9fafb; }
 
 img { 
-  width: 70px; 
-  height: 70px; 
-  border-radius: 8px; 
+  width: 65px; 
+  height: 65px; 
+  border-radius: 10px; 
   object-fit: cover; 
 }
 
@@ -88,29 +94,28 @@ img {
   position: fixed; 
   top: 0; left: 0; 
   width: 100%; height: 100%;
-  background: rgba(0,0,0,0.6); 
+  background: rgba(0,0,0,0.5); 
   display: none; 
   justify-content: center; 
   align-items: center;
   padding:20px;
-  overflow-y:auto;
 }
 
 .modal-content { 
   background: white; 
   padding: 25px; 
   width: 100%; 
-  max-width: 450px; 
-  border-radius: 14px; 
+  max-width: 500px; 
+  border-radius: 16px; 
   animation: fadeIn 0.3s ease;
-  box-shadow:0 10px 25px rgba(0,0,0,0.15);
+  box-shadow:0 10px 40px rgba(0,0,0,0.15);
 }
 
 .modal-content h3 {
   margin-top:0; 
-  font-size:20px; 
+  font-size:22px; 
   font-weight:600;
-  margin-bottom:10px;
+  margin-bottom:15px;
 }
 
 @keyframes fadeIn {
@@ -124,11 +129,46 @@ img {
   margin-top:10px;
 }
 
+/* Buttons layout */
 .action-buttons{
-  margin-top:15px;
+  margin-top:20px;
   display:flex;
   gap:10px;
   justify-content:flex-end;
+}
+
+/* Loader */
+.loader {
+  border: 3px solid #ddd;
+  border-top: 3px solid #0b69ff;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  animation: spin 1s linear infinite;
+  display: inline-block;
+}
+
+@keyframes spin {
+  100% { transform: rotate(360deg); }
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: #16a34a;
+  color: #fff;
+  padding: 12px 18px;
+  border-radius:10px;
+  font-size:14px;
+  opacity:0;
+  transform: translateY(20px);
+  transition: .4s;
+}
+.toast.show{
+  opacity:1;
+  transform: translateY(0);
 }
 
 @media(max-width:600px){
@@ -194,9 +234,10 @@ img {
 </div>
 </div>
 
+<div id="toast" class="toast">Saved Successfully ✔</div>
+
 
 <script type="module">
-/*** Firebase Setup ***/
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
 import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, updateDoc, onSnapshot } 
 from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
@@ -217,14 +258,15 @@ const db = getFirestore(app);
 let editingId = null;
 let base64Image = null;
 
-/*** UI Elements ***/
 const modal = document.getElementById("productModal");
 const tableBody = document.querySelector("#productTable tbody");
 const filterSelect = document.getElementById("filterCategory");
 const categorySelect = document.getElementById("categorySelect");
 const preview = document.getElementById("preview");
+const saveBtn = document.getElementById("saveBtn");
+const toast = document.getElementById("toast");
 
-/*** Fetch and Load Categories ***/
+
 async function loadCategories() {
   const snapshot = await getDocs(collection(db,"firestoreCategories"));
   snapshot.forEach(doc => {
@@ -235,7 +277,7 @@ async function loadCategories() {
 }
 loadCategories();
 
-/*** Load Products Live ***/
+
 onSnapshot(collection(db, "products"), snapshot => {
   tableBody.innerHTML = "";
   let products = [];
@@ -262,7 +304,7 @@ onSnapshot(collection(db, "products"), snapshot => {
   });
 });
 
-/*** Image Convert to Base64 ***/
+
 document.getElementById("imageUpload").addEventListener("change", function(event){
   const reader = new FileReader();
   reader.onload = () => {
@@ -273,15 +315,19 @@ document.getElementById("imageUpload").addEventListener("change", function(event
   reader.readAsDataURL(event.target.files[0]);
 });
 
-/*** Modal Controls ***/
+
 function openModal(){ modal.style.display = "flex"; }
 function closeModal(){ modal.style.display = "none"; editingId = null; base64Image=null; }
 
 window.openModal = openModal;
 window.closeModal = closeModal;
 
-/*** Save Product ***/
+
+// ⭐ SAVE WITH LOADER & TOAST
 async function saveProduct(){
+  saveBtn.innerHTML = `<span class="loader"></span> Saving...`;
+  saveBtn.disabled = true;
+
   const data = {
     title: title.value,
     weight: Number(weight.value),
@@ -300,11 +346,16 @@ async function saveProduct(){
     await addDoc(collection(db,"products"), data);
   }
 
+  saveBtn.innerHTML = "💾 Save";
+  saveBtn.disabled = false;
+
   closeModal();
+  showToast();
 }
 window.saveProduct = saveProduct;
 
-/*** Edit Product ***/
+
+// Restore form for edit
 window.editProduct = (item) => {
   editingId = item.id;
   title.value = item.title;
@@ -321,12 +372,18 @@ window.editProduct = (item) => {
   openModal();
 };
 
-/*** Delete Product ***/
+
 window.deleteProduct = async (id)=> {
   if(confirm("Delete Product?")){
     await deleteDoc(doc(db,"products",id));
   }
 };
+
+// 🔔 Toast Function
+function showToast() {
+  toast.classList.add("show");
+  setTimeout(() => toast.classList.remove("show"), 2000);
+}
 </script>
 
 </body>
