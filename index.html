@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Product Manager</title>
+<title>Product Manager SJP</title>
 
 <style>
 *{ box-sizing:border-box; }
@@ -239,8 +239,9 @@ img {
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
-import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, updateDoc, onSnapshot } 
-from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+import { 
+  getFirestore, collection, addDoc, getDocs, deleteDoc, doc, updateDoc, query, where 
+} from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyD5lAZFxBHpYholu5eXtf1Iq1fmRW8pfDg",
@@ -258,7 +259,6 @@ const db = getFirestore(app);
 let editingId = null;
 let base64Image = null;
 
-const modal = document.getElementById("productModal");
 const tableBody = document.querySelector("#productTable tbody");
 const filterSelect = document.getElementById("filterCategory");
 const categorySelect = document.getElementById("categorySelect");
@@ -266,7 +266,14 @@ const preview = document.getElementById("preview");
 const saveBtn = document.getElementById("saveBtn");
 const toast = document.getElementById("toast");
 
+// ⭐ Add Fetch Button
+const fetchBtn = document.createElement("button");
+fetchBtn.textContent = "🔍 Fetch Products";
+fetchBtn.style.marginLeft = "10px";
+fetchBtn.onclick = fetchProductsByCategory;
+filterSelect.insertAdjacentElement("afterend", fetchBtn);
 
+// -------------------- LOAD CATEGORIES --------------------
 async function loadCategories() {
   const snapshot = await getDocs(collection(db,"firestoreCategories"));
   snapshot.forEach(doc => {
@@ -277,18 +284,26 @@ async function loadCategories() {
 }
 loadCategories();
 
+// -------------------- FETCH PRODUCTS --------------------
+async function fetchProductsByCategory() {
+  tableBody.innerHTML = "<tr><td colspan='6'>Loading...</td></tr>";
 
-onSnapshot(collection(db, "products"), snapshot => {
-  tableBody.innerHTML = "";
-  let products = [];
-  
-  snapshot.forEach(doc => products.push({ id: doc.id, ...doc.data() }));
-  
-  if (filterSelect.value !== "all") {
-    products = products.filter(p => p.categoryId === filterSelect.value);
+  let productsRef = collection(db, "products");
+
+  let q;
+  if (filterSelect.value === "all") {
+    q = productsRef;
+  } else {
+    q = query(productsRef, where("categoryId", "==", filterSelect.value));
   }
 
-  products.forEach(p => {
+  const snapshot = await getDocs(q);
+
+  tableBody.innerHTML = ""; // clear
+
+  snapshot.forEach(docu => {
+    const p = { id: docu.id, ...docu.data() };
+
     tableBody.innerHTML += `
       <tr>
         <td><img src="data:image/jpeg;base64,${p.image}" /></td>
@@ -302,9 +317,13 @@ onSnapshot(collection(db, "products"), snapshot => {
         </td>
       </tr>`;
   });
-});
 
+  if (snapshot.empty) {
+    tableBody.innerHTML = `<tr><td colspan="6">No products found</td></tr>`;
+  }
+}
 
+// -------------------- IMAGE UPLOAD --------------------
 document.getElementById("imageUpload").addEventListener("change", function(event){
   const reader = new FileReader();
   reader.onload = () => {
@@ -315,16 +334,16 @@ document.getElementById("imageUpload").addEventListener("change", function(event
   reader.readAsDataURL(event.target.files[0]);
 });
 
+// -------------------- MODAL --------------------
+window.openModal = () => document.getElementById("productModal").style.display = "flex";
+window.closeModal = () => {
+  document.getElementById("productModal").style.display = "none";
+  editingId = null;
+  base64Image=null;
+};
 
-function openModal(){ modal.style.display = "flex"; }
-function closeModal(){ modal.style.display = "none"; editingId = null; base64Image=null; }
-
-window.openModal = openModal;
-window.closeModal = closeModal;
-
-
-// ⭐ SAVE WITH LOADER & TOAST
-async function saveProduct(){
+// -------------------- SAVE PRODUCT --------------------
+window.saveProduct = async () => {
   saveBtn.innerHTML = `<span class="loader"></span> Saving...`;
   saveBtn.disabled = true;
 
@@ -340,9 +359,9 @@ async function saveProduct(){
     image: base64Image
   };
 
-  if(editingId){
+  if (editingId) {
     await updateDoc(doc(db,"products",editingId), data);
-  } else{
+  } else {
     await addDoc(collection(db,"products"), data);
   }
 
@@ -351,11 +370,10 @@ async function saveProduct(){
 
   closeModal();
   showToast();
-}
-window.saveProduct = saveProduct;
+  // fetchProductsByCategory(); // reload only selected category
+};
 
-
-// Restore form for edit
+// -------------------- EDIT PRODUCT --------------------
 window.editProduct = (item) => {
   editingId = item.id;
   title.value = item.title;
@@ -372,19 +390,21 @@ window.editProduct = (item) => {
   openModal();
 };
 
-
-window.deleteProduct = async (id)=> {
-  if(confirm("Delete Product?")){
+// -------------------- DELETE PRODUCT --------------------
+window.deleteProduct = async (id) => {
+  if (confirm("Delete Product?")) {
     await deleteDoc(doc(db,"products",id));
+    fetchProductsByCategory();
   }
 };
 
-// 🔔 Toast Function
+// -------------------- TOAST --------------------
 function showToast() {
   toast.classList.add("show");
   setTimeout(() => toast.classList.remove("show"), 2000);
 }
 </script>
+
 
 </body>
 </html>
