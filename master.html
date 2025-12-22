@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Master Category Admin</title>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore-compat.js"></script>
+
+<style>
+body {
+    font-family: Arial, sans-serif;
+    background: #f6f6f6;
+    padding: 20px;
+}
+.card {
+    background: #fff;
+    padding: 14px;
+    border-radius: 10px;
+    margin-bottom: 10px;
+    display: flex;
+    gap: 12px;
+    box-shadow: 0 0 5px rgba(0,0,0,.1);
+}
+img {
+    width: 70px;
+    height: 70px;
+    object-fit: cover;
+    border-radius: 6px;
+}
+.actions button {
+    margin-left: 5px;
+    padding: 6px 10px;
+    border: none;
+    color: #fff;
+    border-radius: 6px;
+    cursor: pointer;
+}
+.editBtn { background: #2196F3 }
+.deleteBtn { background: #e53935 }
+
+#addBtn {
+    position: fixed;
+    bottom: 25px;
+    right: 25px;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: #2196F3;
+    color: #fff;
+    font-size: 35px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+}
+
+/* MODAL */
+.modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.5);
+    display: none;
+    justify-content: center;
+    align-items: center;
+}
+.modal-content {
+    background: #fff;
+    padding: 20px;
+    width: 380px;
+    border-radius: 12px;
+}
+input {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 10px;
+}
+#imagePreview {
+    width: 100%;
+    height: 180px;
+    object-fit: cover;
+    display: none;
+    border-radius: 8px;
+}
+
+/* FANCY MULTI SELECT */
+.multi-select {
+    position: relative;
+    margin-bottom: 10px;
+}
+.select-box {
+    border: 1px solid #ccc;
+    padding: 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+}
+.checkbox-list {
+    position: absolute;
+    width: 100%;
+    max-height: 180px;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    margin-top: 4px;
+    display: none;
+    z-index: 10;
+}
+.checkbox-list label {
+    display: flex;
+    align-items: center;
+    padding: 8px;
+    cursor: pointer;
+}
+.checkbox-list label:hover {
+    background: #f1f1f1;
+}
+.checkbox-list input {
+    margin-right: 8px;
+}
+
+button {
+    width: 100%;
+    padding: 10px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+}
+#saveBtn { background: #2196F3; color: #fff }
+#closeModal { background: #e53935; color: #fff; margin-top: 10px }
+</style>
+</head>
+
+<body>
+
+<h2>Master Categories</h2>
+<div id="list"></div>
+
+<div id="addBtn">+</div>
+
+<!-- MODAL -->
+<div class="modal" id="modal">
+  <div class="modal-content">
+    <h3 id="modalTitle">Add Master Category</h3>
+
+    <input type="text" id="titleInput" placeholder="Master Category Name">
+
+    <input type="file" id="imageInput" accept="image/*">
+    <img id="imagePreview">
+
+    <label><strong>Select Sub Categories</strong></label>
+    <div class="multi-select" id="multiSelect">
+        <div class="select-box" id="selectBox">
+            Select Sub Categories
+            <span>▼</span>
+        </div>
+        <div class="checkbox-list" id="checkboxList"></div>
+    </div>
+
+    <button id="saveBtn">Save</button>
+    <button id="closeModal">Cancel</button>
+  </div>
+</div>
+
+<script>
+// -------------------------------------
+// FIREBASE INIT
+// -------------------------------------
+firebase.initializeApp({
+  apiKey: "AIzaSyD5lAZFxBHpYholu5eXtf1Iq1fmRW8pfDg",
+  authDomain: "sjp-backend.firebaseapp.com",
+  projectId: "sjp-backend"
+});
+
+const db = firebase.firestore();
+const categoryRef = db.collection("firestoreCategories");
+const masterRef = db.collection("masterCategory");
+
+// -------------------------------------
+let editingId = null;
+let base64Image = null;
+
+// DOM
+const modal = document.getElementById("modal");
+const list = document.getElementById("list");
+const titleInput = document.getElementById("titleInput");
+const imageInput = document.getElementById("imageInput");
+const imagePreview = document.getElementById("imagePreview");
+const selectBox = document.getElementById("selectBox");
+const checkboxList = document.getElementById("checkboxList");
+
+// -------------------------------------
+// LOAD SUB CATEGORIES (CHECKBOX)
+// -------------------------------------
+categoryRef.onSnapshot(snapshot => {
+    checkboxList.innerHTML = "";
+    snapshot.forEach(doc => {
+        const d = doc.data();
+        const label = document.createElement("label");
+        label.innerHTML = `
+          <input type="checkbox" value="${doc.id}" data-title="${d.title}">
+          ${d.title}
+        `;
+        checkboxList.appendChild(label);
+    });
+});
+
+// -------------------------------------
+// IMAGE TO BASE64
+// -------------------------------------
+imageInput.onchange = () => {
+    const reader = new FileReader();
+    reader.onload = e => {
+        base64Image = e.target.result.split(",")[1];
+        imagePreview.src = e.target.result;
+        imagePreview.style.display = "block";
+    };
+    reader.readAsDataURL(imageInput.files[0]);
+};
+
+// -------------------------------------
+// MULTI SELECT LOGIC
+// -------------------------------------
+selectBox.onclick = () => {
+    checkboxList.style.display =
+        checkboxList.style.display === "block" ? "none" : "block";
+};
+
+document.addEventListener("click", e => {
+    if (!document.getElementById("multiSelect").contains(e.target)) {
+        checkboxList.style.display = "none";
+    }
+});
+
+function getSelectedSubCategories() {
+    const checked = checkboxList.querySelectorAll("input:checked");
+    const selected = [];
+
+    checked.forEach(c => {
+        selected.push({
+            id: c.value,
+            title: c.dataset.title
+        });
+    });
+
+    selectBox.innerHTML =
+        selected.length ? selected.map(s => s.title).join(", ") + " ▼" : "Select Sub Categories ▼";
+
+    return selected;
+}
+
+function setSelectedSubCategories(list) {
+    const checkboxes = checkboxList.querySelectorAll("input");
+    checkboxes.forEach(cb => {
+        cb.checked = list.some(s => s.id === cb.value);
+    });
+    selectBox.innerHTML = list.map(s => s.title).join(", ") + " ▼";
+}
+
+// -------------------------------------
+// SAVE
+// -------------------------------------
+document.getElementById("saveBtn").onclick = async () => {
+    const title = titleInput.value.trim();
+    const subCategories = getSelectedSubCategories();
+
+    if (!title || !base64Image || !subCategories.length) {
+        alert("All fields required");
+        return;
+    }
+
+    const data = {
+        title,
+        image: base64Image,
+        subCategories,
+        updatedAt: new Date()
+    };
+
+    if (editingId) {
+        await masterRef.doc(editingId).update(data);
+    } else {
+        await masterRef.add({ ...data, createdAt: new Date() });
+    }
+
+    modal.style.display = "none";
+};
+
+// -------------------------------------
+// LOAD MASTER CATEGORIES
+// -------------------------------------
+masterRef.onSnapshot(snapshot => {
+    list.innerHTML = "";
+    snapshot.forEach(doc => {
+        const d = doc.data();
+        const div = document.createElement("div");
+        div.className = "card";
+
+        div.innerHTML = `
+          <img src="data:image/jpeg;base64,${d.image}">
+          <div style="flex:1">
+            <strong>${d.title}</strong>
+            <div style="font-size:13px;color:#555">
+              ${d.subCategories.map(s => s.title).join(", ")}
+            </div>
+          </div>
+          <div class="actions">
+            <button class="editBtn">Edit</button>
+            <button class="deleteBtn">Delete</button>
+          </div>
+        `;
+
+        div.querySelector(".editBtn").onclick = () => {
+            editingId = doc.id;
+            titleInput.value = d.title;
+            base64Image = d.image;
+            imagePreview.src = `data:image/jpeg;base64,${d.image}`;
+            imagePreview.style.display = "block";
+            setSelectedSubCategories(d.subCategories);
+            modal.style.display = "flex";
+        };
+
+        div.querySelector(".deleteBtn").onclick = async () => {
+            if (confirm("Delete this master category?")) {
+                await masterRef.doc(doc.id).delete();
+            }
+        };
+
+        list.appendChild(div);
+    });
+});
+
+// -------------------------------------
+document.getElementById("addBtn").onclick = () => {
+    editingId = null;
+    titleInput.value = "";
+    imagePreview.style.display = "none";
+    base64Image = null;
+    setSelectedSubCategories([]);
+    modal.style.display = "flex";
+};
+
+document.getElementById("closeModal").onclick = () => {
+    modal.style.display = "none";
+};
+</script>
+
+</body>
+</html>
