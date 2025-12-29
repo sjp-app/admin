@@ -14,6 +14,8 @@ body {
     background: #f6f6f6;
     padding: 20px;
 }
+h2 { margin-bottom: 10px }
+
 .card {
     background: #fff;
     padding: 14px;
@@ -84,42 +86,67 @@ input {
     border-radius: 8px;
 }
 
-/* FANCY MULTI SELECT */
+/* ===== IMPROVED MULTI SELECT ===== */
 .multi-select {
     position: relative;
-    margin-bottom: 10px;
+    margin-bottom: 14px;
+    font-size: 14px;
 }
 .select-box {
+    min-height: 44px;
     border: 1px solid #ccc;
-    padding: 10px;
-    border-radius: 6px;
+    padding: 6px 10px;
+    border-radius: 8px;
     cursor: pointer;
     display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
     justify-content: space-between;
+    background: #fafafa;
+}
+.select-box.open .arrow {
+    transform: rotate(180deg);
+}
+.placeholder {
+    color: #888;
+}
+.arrow {
+    font-size: 12px;
+    transition: transform .2s ease;
+}
+.chip {
+    background: #2196F3;
+    color: #fff;
+    padding: 4px 8px;
+    border-radius: 14px;
+    font-size: 12px;
 }
 .checkbox-list {
     position: absolute;
     width: 100%;
-    max-height: 180px;
+    max-height: 220px;
     overflow-y: auto;
     background: #fff;
     border: 1px solid #ccc;
-    border-radius: 6px;
-    margin-top: 4px;
+    border-radius: 10px;
+    margin-top: 6px;
     display: none;
-    z-index: 10;
+    z-index: 20;
+    box-shadow: 0 6px 15px rgba(0,0,0,.15);
 }
 .checkbox-list label {
     display: flex;
     align-items: center;
-    padding: 8px;
+    padding: 10px;
     cursor: pointer;
+    gap: 8px;
 }
 .checkbox-list label:hover {
-    background: #f1f1f1;
+    background: #f2f7ff;
 }
 .checkbox-list input {
-    margin-right: 8px;
+    transform: scale(1.1);
 }
 
 button {
@@ -154,8 +181,8 @@ button {
     <label><strong>Select Sub Categories</strong></label>
     <div class="multi-select" id="multiSelect">
         <div class="select-box" id="selectBox">
-            Select Sub Categories
-            <span>▼</span>
+            <span class="placeholder">Select Sub Categories</span>
+            <span class="arrow">▼</span>
         </div>
         <div class="checkbox-list" id="checkboxList"></div>
     </div>
@@ -166,9 +193,7 @@ button {
 </div>
 
 <script>
-// -------------------------------------
 // FIREBASE INIT
-// -------------------------------------
 firebase.initializeApp({
   apiKey: "AIzaSyD5lAZFxBHpYholu5eXtf1Iq1fmRW8pfDg",
   authDomain: "sjp-backend.firebaseapp.com",
@@ -179,7 +204,6 @@ const db = firebase.firestore();
 const categoryRef = db.collection("firestoreCategories");
 const masterRef = db.collection("masterCategory");
 
-// -------------------------------------
 let editingId = null;
 let base64Image = null;
 
@@ -192,9 +216,7 @@ const imagePreview = document.getElementById("imagePreview");
 const selectBox = document.getElementById("selectBox");
 const checkboxList = document.getElementById("checkboxList");
 
-// -------------------------------------
-// LOAD SUB CATEGORIES (CHECKBOX)
-// -------------------------------------
+// LOAD SUB CATEGORIES
 categoryRef.onSnapshot(snapshot => {
     checkboxList.innerHTML = "";
     snapshot.forEach(doc => {
@@ -208,9 +230,7 @@ categoryRef.onSnapshot(snapshot => {
     });
 });
 
-// -------------------------------------
 // IMAGE TO BASE64
-// -------------------------------------
 imageInput.onchange = () => {
     const reader = new FileReader();
     reader.onload = e => {
@@ -221,48 +241,51 @@ imageInput.onchange = () => {
     reader.readAsDataURL(imageInput.files[0]);
 };
 
-// -------------------------------------
-// MULTI SELECT LOGIC
-// -------------------------------------
+// MULTI SELECT
 selectBox.onclick = () => {
     checkboxList.style.display =
         checkboxList.style.display === "block" ? "none" : "block";
+    selectBox.classList.toggle("open");
 };
 
 document.addEventListener("click", e => {
     if (!document.getElementById("multiSelect").contains(e.target)) {
         checkboxList.style.display = "none";
+        selectBox.classList.remove("open");
     }
 });
 
 function getSelectedSubCategories() {
     const checked = checkboxList.querySelectorAll("input:checked");
     const selected = [];
-
-    checked.forEach(c => {
-        selected.push({
-            id: c.value,
-            title: c.dataset.title
-        });
-    });
-
-    selectBox.innerHTML =
-        selected.length ? selected.map(s => s.title).join(", ") + " ▼" : "Select Sub Categories ▼";
-
+    checked.forEach(c => selected.push({ id: c.value, title: c.dataset.title }));
+    renderSelected(selected);
     return selected;
 }
 
 function setSelectedSubCategories(list) {
-    const checkboxes = checkboxList.querySelectorAll("input");
-    checkboxes.forEach(cb => {
+    checkboxList.querySelectorAll("input").forEach(cb => {
         cb.checked = list.some(s => s.id === cb.value);
     });
-    selectBox.innerHTML = list.map(s => s.title).join(", ") + " ▼";
+    renderSelected(list);
 }
 
-// -------------------------------------
+function renderSelected(list) {
+    selectBox.innerHTML = "";
+    if (!list.length) {
+        selectBox.innerHTML = `<span class="placeholder">Select Sub Categories</span><span class="arrow">▼</span>`;
+        return;
+    }
+    list.forEach(i => {
+        const chip = document.createElement("div");
+        chip.className = "chip";
+        chip.textContent = i.title;
+        selectBox.appendChild(chip);
+    });
+    selectBox.innerHTML += `<span class="arrow">▼</span>`;
+}
+
 // SAVE
-// -------------------------------------
 document.getElementById("saveBtn").onclick = async () => {
     const title = titleInput.value.trim();
     const subCategories = getSelectedSubCategories();
@@ -279,25 +302,20 @@ document.getElementById("saveBtn").onclick = async () => {
         updatedAt: new Date()
     };
 
-    if (editingId) {
-        await masterRef.doc(editingId).update(data);
-    } else {
-        await masterRef.add({ ...data, createdAt: new Date() });
-    }
+    editingId
+        ? await masterRef.doc(editingId).update(data)
+        : await masterRef.add({ ...data, createdAt: new Date() });
 
     modal.style.display = "none";
 };
 
-// -------------------------------------
-// LOAD MASTER CATEGORIES
-// -------------------------------------
+// LOAD MASTER
 masterRef.onSnapshot(snapshot => {
     list.innerHTML = "";
     snapshot.forEach(doc => {
         const d = doc.data();
         const div = document.createElement("div");
         div.className = "card";
-
         div.innerHTML = `
           <img src="data:image/jpeg;base64,${d.image}">
           <div style="flex:1">
@@ -327,12 +345,11 @@ masterRef.onSnapshot(snapshot => {
                 await masterRef.doc(doc.id).delete();
             }
         };
-
         list.appendChild(div);
     });
 });
 
-// -------------------------------------
+// ADD
 document.getElementById("addBtn").onclick = () => {
     editingId = null;
     titleInput.value = "";
